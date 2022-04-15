@@ -17,6 +17,13 @@ depends_on = None
 
 def upgrade():
     op.create_table(
+        "tags",
+        sqlalchemy.Column("tag_id", sqlalchemy.Integer, primary_key=True),
+        sqlalchemy.Column("name", sqlalchemy.String, nullable=False),
+        sqlalchemy.Column("description", sqlalchemy.String, nullable=False),
+    )
+
+    op.create_table(
         "posts",
         sqlalchemy.Column("post_id", sqlalchemy.Integer, primary_key=True),
         sqlalchemy.Column("title", sqlalchemy.String, nullable=False),
@@ -41,13 +48,6 @@ def upgrade():
             sqlalchemy.ForeignKey("tags.tag_id"),
             primary_key=True,
         ),
-    )
-
-    op.create_table(
-        "tags",
-        sqlalchemy.Column("tag_id", sqlalchemy.Integer, primary_key=True),
-        sqlalchemy.Column("name", sqlalchemy.String, nullable=False),
-        sqlalchemy.Column("description", sqlalchemy.String, nullable=False),
     )
 
 

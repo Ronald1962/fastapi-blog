@@ -9,12 +9,20 @@ from pydantic import BaseModel
 from sqlalchemy import desc, func, select
 
 # SQLAlchemy specific code, as with any other app
-DATABASE_URL = "sqlite:///" + str(Path(__file__).parent / "blog.db")
-# DATABASE_URL = "postgresql://user:password@postgresserver/db"
+# DATABASE_URL = "sqlite:///" + str(Path(__file__).parent / "blog.db")
+DATABASE_URL = "postgresql:///db"
 
 database = databases.Database(DATABASE_URL)
 
 metadata = sqlalchemy.MetaData()
+
+tags = sqlalchemy.Table(
+    "tags",
+    metadata,
+    sqlalchemy.Column("tag_id", sqlalchemy.Integer, primary_key=True),
+    sqlalchemy.Column("name", sqlalchemy.String, nullable=False),
+    sqlalchemy.Column("description", sqlalchemy.String, nullable=False),
+)
 
 posts = sqlalchemy.Table(
     "posts",
@@ -29,7 +37,6 @@ posts = sqlalchemy.Table(
     sqlalchemy.Column("content", sqlalchemy.Text, nullable=False),
     sqlalchemy.Column("completed", sqlalchemy.Boolean, nullable=False, default=False),
 )
-
 
 post_tags = sqlalchemy.Table(
     "post_tags",
@@ -47,16 +54,6 @@ post_tags = sqlalchemy.Table(
         primary_key=True,
     ),
 )
-
-
-tags = sqlalchemy.Table(
-    "tags",
-    metadata,
-    sqlalchemy.Column("tag_id", sqlalchemy.Integer, primary_key=True),
-    sqlalchemy.Column("name", sqlalchemy.String, nullable=False),
-    sqlalchemy.Column("description", sqlalchemy.String, nullable=False),
-)
-
 
 engine = sqlalchemy.create_engine(
     DATABASE_URL, connect_args={"check_same_thread": False}
@@ -93,16 +90,13 @@ async def fetch_last_post_id() -> int:
 async def fetch_post(post_id: int = None) -> Optional[Mapping]:
     post_id = post_id or await fetch_last_post_id()
     query = (
-        select([posts, func.group_concat(tags.c.name).label("tag_list")])
-        .select_from(posts.outerjoin(post_tags).outerjoin(tags))
-        .group_by(posts.c.post_id)
+        select([posts])
+        .select_from(posts)
         .where(posts.c.post_id == post_id)
     )
     post = await database.fetch_one(query)
     post = dict(post.items())
-    post["tag_list"] = (
-        post["tag_list"].split(",") if post["tag_list"] is not None else []
-    )
+    post["tag_list"] = []
     post["content"] = markdown2.markdown(post["content"])
     return post
 
@@ -111,21 +105,17 @@ async def fetch_posts(
     post_ids: List[int] = None, offset: int = 0, limit: int = 3
 ) -> List[Mapping]:
     query = (
-        select([posts, func.group_concat(tags.c.name).label("tag_list")])
-        .select_from(posts.outerjoin(post_tags).outerjoin(tags))
-        .group_by(posts.c.post_id)
+        select([posts])
+        .select_from(posts)
     )
     if post_ids:
         query = query.where(posts.c.post_id.in_(post_ids))
     else:
         query = query.limit(limit).offset(offset)
-
     fetched_posts = []
     for row in await database.fetch_all(query):
         post = dict(row.items())
-        post["tag_list"] = (
-            post["tag_list"].split(",") if post["tag_list"] is not None else []
-        )
+        post["tag_list"] = []
         fetched_posts.append(post)
     return fetched_posts
 
@@ -158,32 +148,26 @@ async def fetch_most_popular_tag_id() -> int:
 async def fetch_tag(tag_id: int = None) -> Optional[Mapping]:
     tag_id = tag_id or await fetch_most_popular_tag_id()
     query = (
-        select([tags, func.group_concat(post_tags.c.post_id).label("post_list")])
-        .select_from(tags.outerjoin(post_tags))
-        .group_by(tags.c.tag_id)
+        select([tags])
+        .select_from(tags)
         .where(tags.c.tag_id == tag_id)
     )
     tag = await database.fetch_one(query)
     tag = dict(tag.items())
-    tag["post_list"] = (
-        tag["post_list"].split(",") if tag["post_list"] is not None else []
-    )
+    tag["post_list"] = []
     return tag
 
 
 async def fetch_tags(offset: int = 0, limit: int = 5) -> List[Mapping]:
     query = (
-        select([tags, func.group_concat(post_tags.c.post_id).label("post_list")])
-        .select_from(tags.outerjoin(post_tags))
-        .group_by(tags.c.tag_id)
+        select([tags])
+        .select_from(tags)
         .limit(limit)
         .offset(offset)
     )
     fetched_tags = []
     for row in await database.fetch_all(query):
         tag = dict(row.items())
-        tag["post_list"] = (
-            tag["post_list"].split(",") if tag["post_list"] is not None else []
-        )
+        tag["post_list"] = []
         fetched_tags.append(tag)
     return fetched_tags
